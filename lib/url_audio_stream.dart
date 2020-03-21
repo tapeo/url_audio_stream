@@ -2,16 +2,14 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 class AudioStream {
-  String _url;
+
   static const MethodChannel _channel = const MethodChannel('url_audio_stream');
 
-  AudioStream(String url) {
-    this._url = url;
-  }
+  AudioStream();
 
-  Future<void> start() async {
+  Future<void> start(String path) async {
     try {
-      await _channel.invokeMethod(_url.toString(), "start");
+      await _channel.invokeMethod("start", path);
     } on PlatformException catch (e) {
       print("Stream start error : $e");
     }
@@ -19,7 +17,7 @@ class AudioStream {
 
   Future<void> stop() async {
     try {
-      await _channel.invokeMethod(_url.toString(), "stop");
+      await _channel.invokeMethod("stop");
     } on PlatformException catch (e) {
       print("Stream stop error : $e");
     }
@@ -27,7 +25,7 @@ class AudioStream {
 
   Future<void> pause() async {
     try {
-      await _channel.invokeMethod(_url.toString(), "pause");
+      await _channel.invokeMethod("pause");
     } on PlatformException catch (e) {
       print("Stream pause error : $e");
     }
@@ -35,7 +33,7 @@ class AudioStream {
 
   Future<void> resume() async {
     try {
-      await _channel.invokeMethod(_url.toString(), "resume");
+      await _channel.invokeMethod("resume");
     } on PlatformException catch (e) {
       print("Stream resume error : $e");
     }

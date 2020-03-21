@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_audio_stream/url_audio_stream.dart';
 
 void main() => runApp(MyApp());
@@ -18,20 +22,28 @@ class _MyAppState extends State<MyApp> {
     super.initState();
   }
 
+  AudioStream stream = new AudioStream();
 
-  static AudioStream stream = new AudioStream("");
   Future<void> callAudio(String action) async{
     if(action == "start"){
-      stream.start();
+
+      final ByteData data = await rootBundle.load('assets/synthesized-audio.mp3');
+      Directory tempDir = await getApplicationDocumentsDirectory();
+      File tempFile = File('${tempDir.path}/demo.mp3');
+      await tempFile.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      String mp3Uri = tempFile.uri.toString();
+
+      print("start");
+      await stream.start(mp3Uri);
+      print("end");
     }else if(action == "stop"){
-      stream.stop();
+      await stream.stop();
     }else if(action == "pause"){
-      stream.pause();
+      await stream.pause();
     }else{
-      stream.resume();
+      await stream.resume();
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

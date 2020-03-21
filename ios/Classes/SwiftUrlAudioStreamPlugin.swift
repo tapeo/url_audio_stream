@@ -3,83 +3,99 @@ import UIKit
 import AVFoundation
 
 
-public class SwiftUrlAudioStreamPlugin: NSObject, FlutterPlugin {
-  var player:AVPlayer?
-  var playerItem:AVPlayerItem?
-
-  //register the communication channel between swift and dart
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "url_audio_stream", binaryMessenger: registrar.messenger())
-    let instance = SwiftUrlAudioStreamPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-  }
-
-  //will handle the API dart request based on the passed arguements and the URL passed into the player
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    let url : String = call.method
-    let action = call.arguments as! String
-    if(action == "start"){
-      start(url : url)
-    }else if(action == "stop"){
-      stop()
-    }else if(action == "pause"){
-      pause()
-    }else{
-      resume()
-    }
-  }
-  
-  //will always pass the URL object that the player was created with in dart
-  private func start(url : String){
-    do{
-      let u = URL(string: url)
-      let playerItem:AVPlayerItem = AVPlayerItem(url: u!)
-      try player = AVPlayer(playerItem: playerItem)
-      try player!.play()
-    } catch {
-      NSLog("\n Failed to start playing")
-    }
-
+public class SwiftUrlAudioStreamPlugin: NSObject, FlutterPlugin, AVAudioPlayerDelegate {
     
-  }
-
-  //will stop the player if it isn't null and is actually playing based on bitrate
-  private func stop(){
-    if let play = player{
-      if player?.rate != 0{
-        do{
-          try player!.pause()
-          try player = nil
-        }catch{
-          NSLog("\n Failed to stop player")
-        }
-      }
+    private var audioPlayer: AVAudioPlayer?
+    private var flutterResult: FlutterResult?
+    
+    public static func register(with registrar: FlutterPluginRegistrar) {
+        let channel = FlutterMethodChannel(name: "url_audio_stream", binaryMessenger: registrar.messenger())
+        let instance = SwiftUrlAudioStreamPlugin()
+        registrar.addMethodCallDelegate(instance, channel: channel)
     }
-  }
-
-  //will pause the player if it isn't null and is actually playing based on bitrate
-  private func pause(){
-    if let play = player {
-      if player?.rate != 0{
-        do{
-          try player!.pause()
-        } catch{
-          NSLog("\n Failed to pause player")
+    
+    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        flutterResult = result
+        
+        let action = call.method
+        
+        if(action == "start"){
+            let url : String = call.arguments as! String
+            start(filePath : url)
+        }else if(action == "stop"){
+            stop()
+        }else if(action == "pause"){
+            pause()
+        }else{
+            resume()
         }
-      }
     }
-  }
-  
-  //will resume the player if it isn't null and is actually playing based on bitrate
-  private func resume(){
-    if let play = player {
-      if player?.rate == 0{
-        do{
-          try player!.play()
+    
+    private func start(filePath: String){
+        let url = URL(string: filePath)
+        
+        do {
+            try AVAudioSession.sharedInstance().setCategory(AVAudioSession.Category.playback, options: .duckOthers)
+            try AVAudioSession.sharedInstance().setActive(true)
+            
+            try audioPlayer = AVAudioPlayer(contentsOf: url!, fileTypeHint: AVFileType.wav.rawValue)
+            
+            audioPlayer!.delegate = self
+            
+            audioPlayer!.play()
         } catch {
-          NSLog("\n Failed to resume player")
+            print("start error: \(error)")
+            self.flutterResult!(false)
         }
-      }
+        
     }
-  }
+    
+    private func stop(){
+        audioPlayer?.stop()
+        
+        do {
+            try AVAudioSession.sharedInstance().setActive(false)
+            self.flutterResult!(true)
+        } catch {
+            print("AVAudioSession stop error: \(error)")
+            self.flutterResult!(false)
+        }
+        
+    }
+    
+    private func pause(){
+        audioPlayer?.pause()
+        
+        do {
+            try AVAudioSession.sharedInstance().setActive(false)
+            self.flutterResult!(true)
+        } catch {
+            print("AVAudioSession pause error: \(error)")
+            self.flutterResult!(false)
+        }
+        
+    }
+    
+    private func resume(){
+        audioPlayer?.play()
+        
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            self.flutterResult!(true)
+        } catch {
+            print("AVAudioSession resume error: \(error)")
+            self.flutterResult!(false)
+        }
+        
+    }
+    
+    public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        do {
+            try AVAudioSession.sharedInstance().setActive(false)
+            self.flutterResult!(true)
+        } catch {
+            print("AVAudioSession audioPlayerDidFinishPlaying error: \(error)")
+            self.flutterResult!(false)
+        }
+    }
 }
