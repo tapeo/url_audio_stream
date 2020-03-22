@@ -1,133 +1,202 @@
 package com.example.url_audio_stream;
+
+import android.app.Activity;
+import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.os.Build;
+import android.os.Build.VERSION;
+
+import java.io.IOException;
+
+import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
-import android.util.Log;
-import android.media.MediaPlayer;
-import android.media.MediaPlayer.OnBufferingUpdateListener;
-import android.media.MediaPlayer.OnPreparedListener;
-import android.media.MediaPlayer.OnErrorListener;
-import android.media.AudioManager;
-import java.io.IOException;
-import android.media.AudioAttributes;
-import android.net.Uri;
-import android.os.Build.VERSION; 
 
 public class UrlAudioStreamPlugin implements MethodCallHandler {
-  private static MediaPlayer player = null;
-  private static final String channel = "url_audio_stream";
-  private String url = "";
-  private static final int sdk_build_version = android.os.Build.VERSION.SDK_INT;
-  private static final boolean use_deprecated = sdk_build_version < 26 ? true : false;
 
-  //Registering the communication channel between android and java
-  public static void registerWith(Registrar registrar) {
-    final MethodChannel channel = new MethodChannel(registrar.messenger(), "url_audio_stream");
-    channel.setMethodCallHandler(new UrlAudioStreamPlugin());
-  }
+    private MediaPlayer player;
+    private Result result;
+    private static AudioManager audioManager;
+    private AudioFocusRequest audioFocusRequest;
 
-  //When the flutter API accesses the cold, this will decide on the action to take based on what is passed
-  @Override
-  public void onMethodCall(MethodCall call, Result result) {
-    url = call.method.toString();
-    String action = call.arguments().toString();
-    if(action.equals("start")){
-      initializePlayer();
-      startPlayer();
-    } else if(action.equals("stop")){
-      stopPlayer();
-    } else if(action.equals("pause")){
-      pausePlayer();
-    } else{
-      resumePlayer();
+    public static void registerWith(Registrar registrar) {
+        final MethodChannel channel = new MethodChannel(registrar.messenger(), "url_audio_stream");
+        audioManager = (AudioManager) registrar.activity().getSystemService(Context.AUDIO_SERVICE);
+        channel.setMethodCallHandler(new UrlAudioStreamPlugin());
     }
-  }
 
-  //setting the data source for the mediaplayer object, based on android operating system level (API)
-  private void initializePlayer(){
-    player = new MediaPlayer();
-    try{
-      if(use_deprecated == false){
-        player.setAudioAttributes(new AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-        .build());
-      }else{
-        player.setAudioStreamType(AudioManager.STREAM_MUSIC);
-      }
-      player.setDataSource(url);
-    } catch (IllegalArgumentException e){
-      e.printStackTrace();
-    } catch (IllegalStateException e){
-      e.printStackTrace();
-    } catch (IOException e){
-      e.printStackTrace();
+    @Override
+    public void onMethodCall(MethodCall call, Result result) {
+        this.result = result;
+
+        String action = call.method;
+
+        switch (action) {
+            case "start":
+                String url = call.arguments.toString();
+                initializePlayer(url);
+                startPlayer();
+                break;
+            case "stop":
+                stopPlayer();
+                break;
+            case "pause":
+                pausePlayer();
+                break;
+            default:
+                resumePlayer();
+                break;
+        }
     }
-  }
 
-  //starting the player, will run in async to avoid the main thread from waiting
-  private void startPlayer(){
-    try{
-      if(player != null){
-        player.prepareAsync();
-        player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-          public void onPrepared(MediaPlayer mp) {
-            try{
-              player.start();
-            } catch (IllegalStateException e){
-              e.printStackTrace();
+    private void initializePlayer(String url) {
+        try {
+            if (player != null) {
+                player.stop();
+                player.reset();
+                player.release();
+                player = null;
             }
-          }
-        });
-      }
-    } catch (IllegalStateException e){
-      e.printStackTrace();
-    } catch (Exception e){
-      e.printStackTrace();
-    }
-  }
 
-  //stopping the mediaplayer and setting all objects back to their original states
-  private void stopPlayer(){
-    try{
-      if(player != null){
-        player.stop();
-        player.reset();
-        player.release();
-        player = null;
-      }
-    } catch (IllegalStateException e){
-      e.printStackTrace();
-    } catch (Exception e){
-      e.printStackTrace();
-    }
-  }
+            player = new MediaPlayer();
 
-  //pausing the player if it is already set and playing
-  private void pausePlayer(){
-    try{
-      if(player != null && player.isPlaying()){
-        player.pause();
-      }
-    } catch (IllegalStateException e){
-      e.printStackTrace();
-    } catch (Exception e){
-      e.printStackTrace();
-    }
-  }
+            if (VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                player.setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build());
+            } else {
+                player.setAudioStreamType(AudioManager.STREAM_SYSTEM);
+            }
 
-  //resuming the player which is just starting the audio again, if the player was initialized
-  private void resumePlayer(){
-    try{
-      if(player != null && !player.isPlaying()){
-        player.start();
-      }
-    } catch (IllegalStateException e){
-      e.printStackTrace();
-    } catch (Exception e){
-      e.printStackTrace();
+            player.setDataSource(url);
+
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+        } catch (IllegalStateException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
-  }
+
+    private void startPlayer() {
+        try {
+            if (player != null) {
+
+                requestFocus();
+
+                player.prepareAsync();
+                player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                    public void onPrepared(MediaPlayer mp) {
+                        try {
+                            player.start();
+                        } catch (IllegalStateException e) {
+                            afterException(e);
+                        }
+                    }
+                });
+                player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mediaPlayer) {
+                        try {
+                            abandonFocus();
+                            result.success(true);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+        } catch (Exception e) {
+            afterException(e);
+        }
+    }
+
+    private void requestFocus() {
+        if (VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                AudioAttributes mPlaybackAttributes = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build();
+
+                audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                        .setAudioAttributes(mPlaybackAttributes)
+                        .setOnAudioFocusChangeListener(new AudioManager.OnAudioFocusChangeListener() {
+                            @Override
+                            public void onAudioFocusChange(int i) {
+
+                            }
+                        })
+                        .build();
+
+                audioManager.requestAudioFocus(audioFocusRequest);
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void abandonFocus() {
+        try {
+            if (VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioManager.abandonAudioFocusRequest(audioFocusRequest);
+            }
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    private void stopPlayer() {
+        try {
+            if (player != null) {
+                abandonFocus();
+                player.stop();
+                player.reset();
+                player.release();
+                player = null;
+            }
+            result.success(true);
+        } catch (Exception e) {
+            afterException(e);
+        }
+    }
+
+    private void pausePlayer() {
+        try {
+            if (player != null && player.isPlaying()) {
+                abandonFocus();
+                player.pause();
+            }
+            result.success(true);
+        } catch (Exception e) {
+            afterException(e);
+        }
+    }
+
+    private void resumePlayer() {
+        try {
+            if (player != null && !player.isPlaying()) {
+                abandonFocus();
+                player.start();
+            }
+            result.success(true);
+        } catch (Exception e) {
+            afterException(e);
+        }
+    }
+
+    private void afterException(Exception e){
+        e.printStackTrace();
+        abandonFocus();
+        result.success(false);
+    }
 }
