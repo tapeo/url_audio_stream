@@ -114,6 +114,8 @@ public class UrlAudioStreamPlugin implements MethodCallHandler {
                         }
                     }
                 });
+            } else {
+                result.error("player null", null, null);
             }
         } catch (Exception e) {
             afterException(e);
@@ -197,6 +199,6 @@ public class UrlAudioStreamPlugin implements MethodCallHandler {
     private void afterException(Exception e){
         e.printStackTrace();
         abandonFocus();
-        result.success(false);
+        result.error(e.getMessage(), e.getMessage(), e.getCause());
     }
 }
